@@ -3,7 +3,18 @@ import json
 import unittest
 import zipfile
 import xml.etree.ElementTree as ET
-from splitter import split_file, SplitError
+from splitter import split_path, SplitError
+import tempfile
+from pathlib import Path
+
+def split_file(data, filename, amount, mode="records", array_key=""):
+    with tempfile.TemporaryDirectory() as folder:
+        source = Path(folder)/"input"
+        target = Path(folder)/"result.zip"
+        source.write_bytes(data)
+        name, count = split_path(source, filename, amount, target, mode, array_key)
+        return io.BytesIO(target.read_bytes()), name, count
+
 from app import app
 
 
@@ -47,9 +58,30 @@ class SplitTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.mimetype, 'application/zip')
         with zipfile.ZipFile(io.BytesIO(response.data)) as z: self.assertEqual(len(z.namelist()), 2)
+        response.close()
         self.assertEqual(client.post('/split',data={'amount':'bad'}).status_code, 400)
         response = client.post('/split',data={'file':(io.BytesIO(b'{'),'x.json'),'amount':'1'})
         self.assertEqual(response.status_code,400)
-        self.assertIn(b'Invalid JSON',response.data)
+        self.assertIn(b'class="error"',response.data)
+
+    def test_decimal_precision_and_late_metadata(self):
+        raw = b'{"records":[{"n":0.12345678901234567890123456789}],"meta":"after"}'
+        part = contents(split_file(raw, 'x.json', 1, array_key='records'))[0]
+        self.assertIn(b'0.12345678901234567890123456789', part)
+        self.assertIn(b'after', part)
+
+    def test_upload_size_limit_and_busy(self):
+        from unittest.mock import patch
+        from app import job_lock
+        client = app.test_client()
+        job_lock.acquire()
+        try:
+            self.assertEqual(client.post('/split').status_code,429)
+        finally:
+            job_lock.release()
+        with patch('app.MAX_INPUT',2):
+            response = client.post('/split',data={'file':(io.BytesIO(b'[1]'),'x.json'),'amount':'1'})
+            self.assertEqual(response.status_code,400)
+        self.assertFalse(job_lock.locked())
 
 if __name__ == '__main__': unittest.main()
