@@ -5,7 +5,7 @@ from flask import Flask, Response, render_template, request
 from splitter import MAX_INPUT, SplitError, split_path
 
 app = Flask(__name__)
-app.config.update(MAX_CONTENT_LENGTH=MAX_INPUT+1024*1024, MAX_FORM_MEMORY_SIZE=64*1024, MAX_FORM_PARTS=10)
+app.config.update(MAX_CONTENT_LENGTH=MAX_INPUT+1024*1024, MAX_FORM_MEMORY_SIZE=1024*1024, MAX_FORM_PARTS=10)
 # One job per worker: avoid concurrent large temporary files. Deploy with one worker.
 job_lock = threading.Lock()
 
