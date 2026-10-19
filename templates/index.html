@@ -4,7 +4,7 @@
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>XML Splitter · Techi with Helmet</title>
 <style>
-*{box-sizing:border-box}body{margin:0;background:#f6f7f5;color:#202722;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}a{color:#365e49}header{max-width:1080px;margin:auto;padding:27px 24px;font-size:14px;font-weight:600}header a{text-decoration:none}main{max-width:680px;margin:50px auto 80px;padding:0 24px}.eyebrow{font-size:11px;letter-spacing:2px;color:#4c6d56;text-transform:uppercase}h1{font-size:clamp(40px,8vw,64px);letter-spacing:-3px;line-height:1.05;font-weight:600;margin:18px 0}p{line-height:1.7;color:#687168}.intro{font-size:18px;margin-bottom:32px}form{padding:30px;background:white;border:1px solid #e1e6df;border-radius:24px}.upload{padding:30px 20px;border:1px dashed #a8b9aa;border-radius:15px;background:#f8faf7;margin-bottom:25px}.upload label{margin-top:0}.upload p{font-size:12px;margin-bottom:18px}input[type=file]{max-width:100%;font-size:13px}input::file-selector-button{border:0;background:#e7eee5;padding:10px;border-radius:8px;color:#2c4e36;margin-right:12px;cursor:pointer}label{display:block;font-size:14px;font-weight:550;margin:20px 0 9px}input[type=number],input[type=text],select{width:100%;padding:13px;border:1px solid #d8ded7;border-radius:10px;background:white;font:inherit;color:inherit}.row{display:grid;grid-template-columns:1.4fr 1fr;gap:18px}.help{font-size:12px;margin:8px 0 0}button{width:100%;margin-top:26px;border:0;border-radius:30px;padding:16px;background:#273e2f;color:white;font:inherit;cursor:pointer}button:hover{background:#365e49}button:disabled{opacity:.65;cursor:wait}.error{background:#fff0ed;border:1px solid #f1c4bc;color:#8b3428;padding:15px;border-radius:12px;line-height:1.5;margin-bottom:20px}.privacy{font-size:12px;text-align:center}.details{margin-top:30px;border-top:1px solid #dce2d9;padding-top:20px}.details p{font-size:13px}summary{cursor:pointer;font-size:14px}a:focus-visible,input:focus-visible,button:focus-visible,select:focus-visible,summary:focus-visible{outline:3px solid #8cab92;outline-offset:4px}#status{font-size:13px;color:#365e49}@media(max-width:500px){main{margin-top:30px}.row{grid-template-columns:1fr;gap:0}form{padding:22px}}
+*{box-sizing:border-box}body{margin:0;background:#f6f7f5;color:#202722;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}a{color:#365e49}header{max-width:1080px;margin:auto;padding:27px 24px;font-size:14px;font-weight:600}header a{text-decoration:none}main{max-width:680px;margin:50px auto 80px;padding:0 24px}.eyebrow{font-size:11px;letter-spacing:2px;color:#4c6d56;text-transform:uppercase}h1{font-size:clamp(40px,8vw,64px);letter-spacing:-3px;line-height:1.05;font-weight:600;margin:18px 0}p{line-height:1.7;color:#687168}.intro{font-size:18px;margin-bottom:32px}form{padding:30px;background:white;border:1px solid #e1e6df;border-radius:24px}.upload{padding:30px 20px;border:2px dashed #a8b9aa;border-radius:15px;background:#f8faf7;margin-bottom:25px;text-align:center;transition:background .15s,border-color .15s}.upload.dragging{background:#e5efe3;border-color:#365e49}.upload strong{display:block;font-size:18px}.upload p{font-size:12px;margin:9px 0 18px}.upload input{max-width:100%;font-size:13px}input::file-selector-button{border:0;background:#e7eee5;padding:11px 14px;border-radius:8px;color:#2c4e36;margin-right:12px;cursor:pointer}label{display:block;font-size:14px;font-weight:550;margin:20px 0 9px}input[type=number]{width:100%;padding:13px;border:1px solid #d8ded7;border-radius:10px;background:white;font:inherit;color:inherit}.help{font-size:12px;margin:8px 0 0}.submit{width:100%;margin-top:26px;border:0;border-radius:30px;padding:16px;background:#273e2f;color:white;font:inherit;cursor:pointer}.submit:hover{background:#365e49}.error{background:#fff0ed;border:1px solid #f1c4bc;color:#8b3428;padding:15px;border-radius:12px;line-height:1.5;margin-bottom:20px}.privacy{font-size:12px;text-align:center}.details{margin-top:30px;border-top:1px solid #dce2d9;padding-top:20px}.details p{font-size:13px}summary{cursor:pointer;font-size:14px}a:focus-visible,input:focus-visible,button:focus-visible,summary:focus-visible{outline:3px solid #8cab92;outline-offset:4px}#status,#selection{font-size:13px;color:#365e49;overflow-wrap:anywhere}#selection{margin-top:16px}#file-error{color:#a13929;font-size:13px;line-height:1.6;margin-top:12px}.upload .input-label{font-weight:400;font-size:12px;margin:0 0 12px;color:#687168}.remove{display:block;margin:12px auto 0;background:none;border:0;color:#365e49;text-decoration:underline;font:inherit;font-size:12px;cursor:pointer}.remove[hidden]{display:none}@media(max-width:500px){main{margin-top:30px}form{padding:22px}}@media(prefers-reduced-motion:reduce){.upload{transition:none}}
 </style>
 </head>
 <body>
@@ -14,18 +14,69 @@
 <p class="intro">Split XML into smaller, valid files. Choose how many files you need and download them together in one ZIP.</p>
 {% if error %}<div class="error" role="alert">{{ error }}</div>{% endif %}
 <form action="{{ url_for('split') }}" method="post" enctype="multipart/form-data" id="split-form">
-<div class="upload"><label for="file">Choose your XML file</label><p>Up to 200 MB · .xml or .txt containing XML</p><input id="file" name="file" type="file" accept=".xml,.txt,application/xml,text/xml,text/plain" required></div>
+<div class="upload" id="drop-zone" role="group" aria-labelledby="drop-title">
+<strong id="drop-title">Drag &amp; drop your file here</strong>
+<p id="file-help">XML or TXT containing XML · Up to 200 MB · One file at a time</p>
+<label class="input-label" for="file">Or choose a file from your device</label>
+<input id="file" name="file" type="file" accept=".xml,.txt,application/xml,text/xml,text/plain" required aria-describedby="file-help selection file-error">
+<div id="selection" role="status" aria-live="polite"></div>
+<div id="file-error" role="alert"></div>
+<button type="button" class="remove" id="remove-file" hidden>Remove selected file</button>
+</div>
 <label for="amount">Number of files</label><input id="amount" name="amount" type="number" min="1" max="500" step="1" value="2" required aria-describedby="amount-help"><p id="amount-help" class="help">Create 1–500 balanced files. Each file must contain at least one XML record.</p>
-<button type="submit" id="submit">Split &amp; download ZIP ↗</button><div id="status" role="status" aria-live="polite"></div>
+<button type="submit" class="submit">Split &amp; download ZIP ↗</button><div id="status" role="status" aria-live="polite"></div>
 </form>
 <p class="privacy">Files are uploaded to this server and processed using temporary disk storage, then deleted after download or failure.</p>
 <details class="details"><summary>How does splitting work?</summary><p>Upload an .xml file or a .txt file containing XML. We validate the actual XML contents; ordinary text and JSON files cannot be split.</p><p>Each direct child of the root is treated as one record. Records are distributed evenly across your chosen number of files, in their original order. Each output retains the root name, its attributes and the selected children.</p><p>Every downloaded part has an .xml extension, even when your input uses .txt. The number of files cannot exceed the record count or 500. Parts are balanced by record count, not byte size.</p><p>XML formatting and namespace prefixes may change. Comments and processing instructions are not preserved. DTDs, entities and mixed text between root-level records are rejected. This tool is not for signed XML or exact byte-for-byte preservation.</p></details>
 </main>
 <script>
-const form=document.getElementById('split-form'),status=document.getElementById('status');
+'use strict';
+const form=document.getElementById('split-form');
+const input=document.getElementById('file');
+const zone=document.getElementById('drop-zone');
+const selection=document.getElementById('selection');
+const error=document.getElementById('file-error');
+const remove=document.getElementById('remove-file');
+const status=document.getElementById('status');
+let dragDepth=0;
+function clearSelection(){input.value='';selection.textContent='';error.textContent='';status.textContent='';remove.hidden=true;}
+function acceptFile(file){
+ clearSelection();
+ if(!file){return false;}
+ if(!/\.(xml|txt)$/i.test(file.name)){error.textContent='Choose an .xml or .txt file containing XML.';return false;}
+ if(file.size===0){error.textContent='This file is empty. Choose a file containing XML.';return false;}
+ if(file.size>200000000){error.textContent='This file exceeds 200 MB. Choose a smaller file.';return false;}
+ try{
+  const transfer=new DataTransfer();transfer.items.add(file);input.files=transfer.files;
+ }catch(_){error.textContent='Please use Choose file in this browser.';return false;}
+ selection.textContent=file.name+' · '+(file.size/1000000).toLocaleString(undefined,{maximumFractionDigits:2})+' MB';
+ remove.hidden=false;return true;
+}
+// Keep the native picker: it also works with the keyboard and without JavaScript.
+input.addEventListener('change',()=>{
+ const file=input.files[0];
+ // Picker selection does not need DataTransfer support.
+ if(!file){clearSelection();return;}
+ if(!/\.(xml|txt)$/i.test(file.name)||file.size===0||file.size>200000000){acceptFile(file);return;}
+ error.textContent='';status.textContent='';
+ selection.textContent=file.name+' · '+(file.size/1000000).toLocaleString(undefined,{maximumFractionDigits:2})+' MB';remove.hidden=false;
+});
+remove.addEventListener('click',()=>{clearSelection();input.focus();});
+zone.addEventListener('dragenter',event=>{event.preventDefault();dragDepth++;zone.classList.add('dragging');});
+zone.addEventListener('dragover',event=>{event.preventDefault();if(event.dataTransfer)event.dataTransfer.dropEffect='copy';});
+zone.addEventListener('dragleave',event=>{event.preventDefault();dragDepth=Math.max(0,dragDepth-1);if(!dragDepth)zone.classList.remove('dragging');});
+zone.addEventListener('drop',event=>{
+ event.preventDefault();dragDepth=0;zone.classList.remove('dragging');
+ const files=event.dataTransfer?.files;
+ if(!files||files.length!==1){clearSelection();error.textContent='Drop one XML or TXT file at a time.';return;}
+ acceptFile(files[0]);
+});
+// Avoid navigating away if a file is accidentally dropped outside the box.
+document.addEventListener('dragover',event=>{if(Array.from(event.dataTransfer?.types||[]).includes('Files'))event.preventDefault();});
+document.addEventListener('drop',event=>{if(Array.from(event.dataTransfer?.types||[]).includes('Files')){event.preventDefault();dragDepth=0;zone.classList.remove('dragging');}});
 form.addEventListener('submit',event=>{
- const file=document.getElementById('file').files[0];
- if(file && file.size>200000000){event.preventDefault();status.textContent='Choose a file up to 200 MB.';return;}
+ const file=input.files[0];
+ if(!file||! /\.(xml|txt)$/i.test(file.name)||file.size===0||file.size>200000000){event.preventDefault();acceptFile(file);if(!file)error.textContent='Choose a file first.';return;}
  status.textContent='Uploading and processing… Your browser will start the ZIP download when ready. Keep this page open.';
 });
 </script>
