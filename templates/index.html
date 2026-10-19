@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>File Splitter · Techi with Helmet</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#f6f7f5;color:#202722;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}a{color:#365e49}header{max-width:1080px;margin:auto;padding:27px 24px;font-size:14px;font-weight:600}header a{text-decoration:none}main{max-width:680px;margin:50px auto 80px;padding:0 24px}.eyebrow{font-size:11px;letter-spacing:2px;color:#4c6d56;text-transform:uppercase}h1{font-size:clamp(40px,8vw,64px);letter-spacing:-3px;line-height:1.05;font-weight:600;margin:18px 0}p{line-height:1.7;color:#687168}.intro{font-size:18px;margin-bottom:32px}form{padding:30px;background:white;border:1px solid #e1e6df;border-radius:24px}.upload{padding:30px 20px;border:1px dashed #a8b9aa;border-radius:15px;background:#f8faf7;margin-bottom:25px}.upload label{margin-top:0}.upload p{font-size:12px;margin-bottom:18px}input[type=file]{max-width:100%;font-size:13px}input::file-selector-button{border:0;background:#e7eee5;padding:10px;border-radius:8px;color:#2c4e36;margin-right:12px;cursor:pointer}label{display:block;font-size:14px;font-weight:550;margin:20px 0 9px}input[type=number],input[type=text],select{width:100%;padding:13px;border:1px solid #d8ded7;border-radius:10px;background:white;font:inherit;color:inherit}.row{display:grid;grid-template-columns:1.4fr 1fr;gap:18px}.help{font-size:12px;margin:8px 0 0}button{width:100%;margin-top:26px;border:0;border-radius:30px;padding:16px;background:#273e2f;color:white;font:inherit;cursor:pointer}button:hover{background:#365e49}button:disabled{opacity:.65;cursor:wait}.error{background:#fff0ed;border:1px solid #f1c4bc;color:#8b3428;padding:15px;border-radius:12px;line-height:1.5;margin-bottom:20px}.privacy{font-size:12px;text-align:center}.details{margin-top:30px;border-top:1px solid #dce2d9;padding-top:20px}.details p{font-size:13px}summary{cursor:pointer;font-size:14px}a:focus-visible,input:focus-visible,button:focus-visible,select:focus-visible,summary:focus-visible{outline:3px solid #8cab92;outline-offset:4px}#status{font-size:13px;color:#365e49}@media(max-width:500px){main{margin-top:30px}.row{grid-template-columns:1fr;gap:0}form{padding:22px}}
+</style>
+</head>
+<body>
+<header><a href="https://techiwithhelmet.com">← Techi with Helmet</a></header>
+<main>
+<div class="eyebrow">A useful little tool</div><h1>Big file.<br>Smaller pieces.</h1>
+<p class="intro">Split XML or JSON into smaller, valid files. Pick your size, keep the structure, and download everything in one ZIP.</p>
+{% if error %}<div class="error" role="alert">{{ error }}</div>{% endif %}
+<form action="{{ url_for('split') }}" method="post" enctype="multipart/form-data" id="split-form">
+<div class="upload"><label for="file">Choose your XML or JSON file</label><p>Up to 10 MiB · .xml or .json</p><input id="file" name="file" type="file" accept=".xml,.json,application/json,application/xml,text/xml" required></div>
+<div class="row"><div><label for="mode">Split by</label><select id="mode" name="mode"><option value="records">Records per file</option><option value="parts">Number of files</option></select></div><div><label for="amount">Amount</label><input id="amount" name="amount" type="number" min="1" step="1" value="100" required></div></div>
+<label for="array_key">JSON array key <span style="font-weight:400">(optional)</span></label><input id="array_key" name="array_key" type="text" placeholder="For example: records" maxlength="300" aria-describedby="key-help"><p id="key-help" class="help">Leave blank for a JSON array. For {"records": [...]}, enter records. Other top-level properties repeat in every part.</p>
+<button type="submit" id="submit">Split &amp; download ZIP ↗</button><div id="status" role="status" aria-live="polite"></div>
+</form>
+<p class="privacy">Files are uploaded to this server and processed in memory. This app does not save uploads or results to disk.</p>
+<details class="details"><summary>How does splitting work?</summary><p><strong>JSON:</strong> splits a top-level array, or an array under the top-level key you provide. Each output is valid JSON. Records stay in their original order.</p><p><strong>XML:</strong> splits direct child elements of the root. Each part retains the root name, its attributes and the selected children. Nested record containers must be flattened first.</p><p>Choose “Number of files” for evenly balanced parts, or “Records per file” for a fixed maximum record count. Up to 500 output files. Splitting is by records, not bytes.</p><p>XML formatting and namespace prefixes may change. Comments, processing instructions and DTDs are not preserved; XML with mixed text between records is rejected. This tool is not for signed XML or exact byte-for-byte preservation.</p></details>
+</main>
+<script>
+const form=document.getElementById('split-form'),button=document.getElementById('submit'),status=document.getElementById('status');
+form.addEventListener('submit',async event=>{
+ event.preventDefault(); if(!form.reportValidity())return;
+ const file=document.getElementById('file').files[0];
+ if(file.size>10*1024*1024){status.textContent='Choose a file up to 10 MiB.';return;}
+ button.disabled=true;status.textContent='Splitting your file…';
+ try{
+  const response=await fetch(form.action,{method:'POST',body:new FormData(form)});
+  if(!response.ok){const html=await response.text();const doc=new DOMParser().parseFromString(html,'text/html');throw new Error(doc.querySelector('.error')?.textContent||'Could not split the file. Please try again.');}
+  const blob=await response.blob(),url=URL.createObjectURL(blob),link=document.createElement('a');
+  link.href=url;link.download=(response.headers.get('Content-Disposition')?.match(/filename="?([^";]+)"?/)?.[1]||'split-files.zip');
+  document.body.appendChild(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);
+  status.textContent='Your ZIP is ready. Check your downloads.';
+ }catch(error){status.textContent=error.message||'Connection failed. Please try again.';}finally{button.disabled=false;}
+});
+</script>
+</body></html>
