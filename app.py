@@ -5,6 +5,7 @@ from flask import Flask, Response, render_template, request
 from splitter import MAX_INPUT, SplitError, split_path
 
 app = Flask(__name__)
+# Allow multipart parser buffers plus boundary overlap; uploaded files still spool to disk.
 app.config.update(MAX_CONTENT_LENGTH=MAX_INPUT+1024*1024, MAX_FORM_MEMORY_SIZE=1024*1024, MAX_FORM_PARTS=10)
 # One job per worker: avoid concurrent large temporary files. Deploy with one worker.
 job_lock = threading.Lock()
@@ -34,7 +35,7 @@ def split():
             job_lock.release()
     try:
         upload = request.files.get('file')
-        if not upload or not upload.filename: raise SplitError('Choose an XML or JSON file first.')
+        if not upload or not upload.filename: raise SplitError('Choose an XML file or a .txt file containing XML first.')
         try: amount = int(request.form.get('amount',''))
         except ValueError: raise SplitError('Enter a positive whole number.') from None
         source = Path(directory.name)/'input'
@@ -45,7 +46,7 @@ def split():
                 if total > MAX_INPUT: raise SplitError('Choose a file up to 200 MB.')
                 target.write(chunk)
         archive = Path(directory.name)/'result.zip'
-        filename,_ = split_path(source,upload.filename,amount,archive,request.form.get('mode','records'),request.form.get('array_key','').strip())
+        filename,_ = split_path(source,upload.filename,amount,archive)
         def download():
             try:
                 with archive.open('rb') as file:

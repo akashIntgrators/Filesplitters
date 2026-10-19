@@ -1,87 +1,84 @@
 import io
-import json
+import tempfile
 import unittest
 import zipfile
+from pathlib import Path
+from unittest.mock import patch
 import xml.etree.ElementTree as ET
 from splitter import split_path, SplitError
-import tempfile
-from pathlib import Path
+from app import app, job_lock
 
-def split_file(data, filename, amount, mode="records", array_key=""):
+
+def split_file(data, filename, amount):
     with tempfile.TemporaryDirectory() as folder:
-        source = Path(folder)/"input"
-        target = Path(folder)/"result.zip"
+        source, target = Path(folder)/'input', Path(folder)/'result.zip'
         source.write_bytes(data)
-        name, count = split_path(source, filename, amount, target, mode, array_key)
-        return io.BytesIO(target.read_bytes()), name, count
-
-from app import app
-
-
-def contents(result):
-    with zipfile.ZipFile(result[0]) as z:
-        return [z.read(name) for name in z.namelist()]
+        split_path(source, filename, amount, target)
+        with zipfile.ZipFile(target) as archive:
+            return [(name, ET.fromstring(archive.read(name))) for name in archive.namelist()]
 
 class SplitTests(unittest.TestCase):
-    def test_json_order_and_balanced_parts(self):
-        parts = [json.loads(p) for p in contents(split_file(b'[0,1,2,3,4]', 'a.json', 3, 'parts'))]
-        self.assertEqual([len(p) for p in parts], [2, 2, 1])
-        self.assertEqual(sum(parts, []), list(range(5)))
+    def test_balanced_xml_and_txt_preserve_order(self):
+        data = b'<root version="1">' + b''.join(f'<record id="{i}"/>'.encode() for i in range(5)) + b'</root>'
+        for extension in ('xml', 'txt', 'TXT'):
+            parts = split_file(data, 'input.'+extension, 3)
+            self.assertEqual([len(root) for _,root in parts],[2,2,1])
+            self.assertEqual([int(child.attrib['id']) for _,root in parts for child in root],list(range(5)))
+            self.assertTrue(all(name.endswith('.xml') and root.attrib == {'version':'1'} for name,root in parts))
 
-    def test_json_metadata_and_literal_key(self):
-        data = b'{"a.b":[1,2,3],"meta":{"version":1}}'
-        parts = [json.loads(p) for p in contents(split_file(data, 'x.json', 2, array_key='a.b'))]
-        self.assertEqual(parts[1], {'a.b':[3], 'meta':{'version':1}})
+    def test_namespaces_and_nested_records(self):
+        parts=split_file(b'<r xmlns="urn:test"><item><n>1</n></item><item><n>2</n></item></r>','x.txt',2)
+        self.assertEqual([root[0][0].text for _,root in parts],['1','2'])
+        self.assertTrue(all(root.tag=='{urn:test}r' for _,root in parts))
 
-    def test_xml_wrapper_namespaces_and_nested_records(self):
-        data = b'<r xmlns="urn:test" version="1"><item><n>1</n></item><item><n>2</n></item></r>'
-        parts = [ET.fromstring(p) for p in contents(split_file(data, 'x.xml', 1))]
-        self.assertEqual(len(parts), 2)
-        self.assertTrue(all(p.tag == '{urn:test}r' and p.attrib == {'version':'1'} for p in parts))
-        self.assertEqual([p[0][0].text for p in parts], ['1','2'])
+    def test_invalid_content_extensions_and_amounts(self):
+        for data,name,amount in [(b'plain text','x.txt',1),(b'[1,2]','x.txt',1),
+          (b'<r><i/></r>','x.json',1),(b'<r><i/></r>','x.csv',1),
+          (b'<r/>','x.xml',1),(b'<r><i/></r>','x.xml',2),
+          (b'<r><i/></r>','x.xml',0),(b'<r>text<i/>tail</r>','x.xml',1),
+          (b'<!DOCTYPE r [<!ENTITY x "boom">]><r><i>&x;</i></r>','x.txt',1)]:
+            with self.subTest(name=name,amount=amount),self.assertRaises(SplitError):
+                split_file(data,name,amount)
 
-    def test_unsafe_or_invalid_inputs(self):
-        for data, filename in [(b'{"a":1,"a":2}', 'x.json'), (b'[NaN]', 'x.json'),
-          (b'[]','x.json'), (b'<r>mixed<a/>text</r>','x.xml'),
-          (b'<!DOCTYPE r [<!ENTITY x "boom">]><r><a>&x;</a></r>','x.xml'),
-          (b'{','x.json'), (b'abc','x.txt')]:
-            with self.subTest(data=data), self.assertRaises(SplitError):
-                split_file(data, filename, 1)
-        with self.assertRaises(SplitError): split_file(b'[1]', 'x.json', 2, 'parts')
-        with self.assertRaises(SplitError): split_file(b'[1]', 'x.json', 0)
-        with self.assertRaises(SplitError): split_file(b'['+b'0,'*500+b'0]', 'x.json', 1)
-
-    def test_upload_and_errors(self):
-        client = app.test_client()
-        self.assertEqual(client.get('/').status_code, 200)
-        response = client.post('/split', data={'file':(io.BytesIO(b'[1,2,3]'),'test.json'), 'amount':'2','mode':'records'})
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.mimetype, 'application/zip')
-        with zipfile.ZipFile(io.BytesIO(response.data)) as z: self.assertEqual(len(z.namelist()), 2)
-        response.close()
-        self.assertEqual(client.post('/split',data={'amount':'bad'}).status_code, 400)
-        response = client.post('/split',data={'file':(io.BytesIO(b'{'),'x.json'),'amount':'1'})
+    def test_http_txt_upload_and_ui(self):
+        client=app.test_client()
+        html=client.get('/').data
+        self.assertNotIn(b'name="mode"',html)
+        self.assertNotIn(b'name="array_key"',html)
+        for filename in ('example.xml','example.txt'):
+            response=client.post('/split',data={'file':(io.BytesIO(b'<r><i/><i/></r>'),filename),'amount':'2'})
+            self.assertEqual(response.status_code,200)
+            with zipfile.ZipFile(io.BytesIO(response.data)) as archive:
+                self.assertEqual(len(archive.namelist()),2)
+                self.assertTrue(all(n.endswith('.xml') for n in archive.namelist()))
+            response.close()
+        response=client.post('/split',data={'file':(io.BytesIO(b'not xml'),'example.txt'),'amount':'1'})
         self.assertEqual(response.status_code,400)
-        self.assertIn(b'class="error"',response.data)
+        self.assertIn(b'valid supported XML',response.data)
+        self.assertFalse(job_lock.locked())
 
-    def test_decimal_precision_and_late_metadata(self):
-        raw = b'{"records":[{"n":0.12345678901234567890123456789}],"meta":"after"}'
-        part = contents(split_file(raw, 'x.json', 1, array_key='records'))[0]
-        self.assertIn(b'0.12345678901234567890123456789', part)
-        self.assertIn(b'after', part)
-
-    def test_upload_size_limit_and_busy(self):
-        from unittest.mock import patch
-        from app import job_lock
-        client = app.test_client()
+    def test_size_limit_busy_and_cleanup(self):
+        client=app.test_client()
         job_lock.acquire()
-        try:
-            self.assertEqual(client.post('/split').status_code,429)
-        finally:
-            job_lock.release()
+        try:self.assertEqual(client.post('/split').status_code,429)
+        finally:job_lock.release()
         with patch('app.MAX_INPUT',2):
-            response = client.post('/split',data={'file':(io.BytesIO(b'[1]'),'x.json'),'amount':'1'})
+            response=client.post('/split',data={'file':(io.BytesIO(b'<r/>'),'x.xml'),'amount':'1'})
             self.assertEqual(response.status_code,400)
         self.assertFalse(job_lock.locked())
+
+    def test_multipart_newline_at_parser_buffer_boundary(self):
+        boundary = 'browser-boundary'
+        head = (f'--{boundary}\r\nContent-Disposition: form-data; name="file"; filename="test.xml"\r\nContent-Type: text/xml\r\n\r\n').encode()
+        opening = b'<records><record>'
+        payload = opening + b'x' * (65535 - len(head) - len(opening)) + b'\r\n' + b'x' * 100000 + b'</record></records>'
+        tail = (f'\r\n--{boundary}\r\nContent-Disposition: form-data; name="amount"\r\n\r\n1\r\n--{boundary}--\r\n').encode()
+        response = app.test_client().post('/split', data=head+payload+tail,
+            content_type=f'multipart/form-data; boundary={boundary}')
+        self.assertEqual(response.status_code, 200)
+        with zipfile.ZipFile(io.BytesIO(response.data)) as archive:
+            self.assertEqual(len(archive.namelist()), 1)
+            self.assertEqual(ET.fromstring(archive.read(archive.namelist()[0])).tag, 'records')
+        response.close()
 
 if __name__ == '__main__': unittest.main()
